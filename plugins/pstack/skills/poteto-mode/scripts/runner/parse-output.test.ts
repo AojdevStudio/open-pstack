@@ -1,4 +1,6 @@
 import { describe, expect, it } from "bun:test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { parseProviderOutput, reportedModelMatches } from "./parse-output.ts";
 
 describe("parseProviderOutput", () => {
@@ -22,6 +24,24 @@ describe("parseProviderOutput", () => {
       usage: { inputTokens: 10, outputTokens: 3 },
       costUsd: 0.05,
     });
+  });
+
+  it("accepts the Claude Code 2.1.270 event array and reads its result event", () => {
+    const stream = readFileSync(join(import.meta.dir, "fixtures/claude-json-array.json"), "utf8");
+    const parsed = parseProviderOutput("claude", stream, "", "opus");
+    expect(parsed).toMatchObject({
+      text: "CLAUDE-ARRAY-FIXTURE",
+      reportedModel: "claude-opus-5",
+      sessionId: "0c687680-d769-4bf0-bc31-4f1c4e4efa9b",
+      costUsd: 0.057715,
+    });
+    expect(parsed.usage).toMatchObject({ inputTokens: 2, outputTokens: 21 });
+  });
+
+  it("rejects a Claude event array with no result event", () => {
+    expect(() =>
+      parseProviderOutput("claude", JSON.stringify([{ type: "system", subtype: "init" }]), "", "opus")
+    ).toThrow("no result object");
   });
 
   it("extracts Codex JSONL without inventing a provider-reported model", () => {
