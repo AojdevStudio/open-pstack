@@ -68,8 +68,17 @@ function parseClaude(stdout: string, requestedModel: string): ParsedOutput {
   } catch {
     throw new Error("claude did not emit valid JSON");
   }
-  const value = object(raw);
-  if (value === null) throw new Error("claude emitted a non-object result");
+  // Claude Code 2.1.270+ emits `--output-format json` as an array of stream events
+  // (system, assistant, result). Older releases emitted the result object alone.
+  // Accept both: take the terminal `result` event from an array.
+  const value = Array.isArray(raw)
+    ? raw
+        .map(object)
+        .filter((event): event is JsonObject => event !== null)
+        .filter((event) => event.type === "result")
+        .at(-1) ?? null
+    : object(raw);
+  if (value === null) throw new Error("claude emitted no result object");
 
   const text = nullableString(value.result);
   if (text === null) throw new Error("claude result did not contain final text");
